@@ -1,12 +1,13 @@
 
-
+import SmallNavbar from './Pages/SmallNavbar'
 import './App.css'
 
 function App() {
   
   return (
     <>
-    <h1 className='text-red-400'>Ali Huzaifa</h1>
+      <SmallNavbar />
+     
     </>
   )
 }
