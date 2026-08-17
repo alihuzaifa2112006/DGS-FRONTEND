@@ -1,13 +1,16 @@
 import React from 'react';
+import  {Link} from 'react-router-dom';
+import Help from './Help';
+
 
 const SmallNavbar = () => {
   return (
-    <div className="w-full bg-[#121212] text-white text-xs sm:text-sm py-2 px-4 sm:px-8 border-b border-gray-800">
+    <div className="w-full bg-[#121212] text-white text-xs sm:text-sm py-1.5 px-4 sm:px-8 border-b border-gray-800">
       <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-2">
         
       
         <div className="flex items-center justify-center gap-2 text-center md:text-left flex-1">
-          <span className="text-base">🏆</span>
+    
           <p className="font-normal text-gray-200">
             DGS | Digital Guard System For Your Web & Apps To Prevent From Cyber Attacks And Crimes
           </p>
@@ -28,12 +31,12 @@ const SmallNavbar = () => {
             Login
           </a>
           <span className="text-gray-600 font-light">|</span>
-          <a 
-            href="#help-center" 
-            className="hover:text-white transition-colors font-medium"
-          >
+        
+            <Link to="/help" className="hover:text-white transition-colors">
             Help Center
-          </a>
+            </Link>
+              
+          {/* </a> */}
         </div>
 
       </div>
