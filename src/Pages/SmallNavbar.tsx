@@ -31,10 +31,13 @@ const SmallNavbar = () => {
             Login
           </a>
           <span className="text-gray-600 font-light">|</span>
-        
-            <Link to="/help" className="hover:text-white transition-colors">
+     
+           <Link to="/help" target="_blank" className="hover:text-white transition-colors">
             Help Center
             </Link>
+
+      
+           
               
           {/* </a> */}
         </div>
