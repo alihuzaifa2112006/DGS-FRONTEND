@@ -5,7 +5,7 @@ import Help from './Help';
 
 const SmallNavbar = () => {
   return (
-    <div className="w-full bg-[#121212] text-white text-xs sm:text-sm py-1.5 px-4 sm:px-8 border-b border-gray-800">
+    <div className="w-full bg-[#121212] text-white text-xs sm:text-sm py-3 px-4 sm:px-8 border-b border-gray-800">
       <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-2">
         
       

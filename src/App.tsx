@@ -3,6 +3,7 @@ import { Routes, Route } from 'react-router-dom';
 import './App.css';
 import Help from './Pages/Help';
 import { RadialBackground } from "@/components/ui/light-theme-tailwind-css-background-snippet";
+import Navbar from './Pages/Navbar';
 
 function App() {
   return (
@@ -13,6 +14,7 @@ function App() {
       {/* Main Foreground Content */}
       <div className="relative z-10">
         <SmallNavbar />
+        <Navbar />
         <main className="p-4">
           <Routes>
             <Route path="/" element={<div className="text-slate-900 font-semibold">Home Content</div>} />
