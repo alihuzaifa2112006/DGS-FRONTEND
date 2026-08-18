@@ -130,7 +130,7 @@ const Navbar = () => {
           </a>
         </div>
 
-        {/* Action Buttons with Modern Styling */}
+     
         <div className="hidden lg:flex items-center space-x-3">
         
           <button className="px-4 py-2 text-xs font-semibold text-white bg-slate-900 hover:bg-purple-900 rounded-lg shadow-sm transition-all">
