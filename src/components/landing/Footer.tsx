@@ -1,4 +1,4 @@
-import { Link } from 'react-router-dom'
+import Link from 'next/link'
 import Logo from '@/components/Logo'
 
 const cols = [
@@ -35,7 +35,7 @@ export default function Footer() {
                     {to.startsWith('/#') ? (
                       <a href={to} className="text-[13.5px] text-ink-700 hover:text-brand-600">{label}</a>
                     ) : (
-                      <Link to={to} className="text-[13.5px] text-ink-700 hover:text-brand-600">{label}</Link>
+                      <Link href={to} className="text-[13.5px] text-ink-700 hover:text-brand-600">{label}</Link>
                     )}
                   </li>
                 ))}

@@ -1,3 +1,5 @@
+'use client'
+
 import { useEffect, useState, type ReactNode } from 'react'
 import { AnimatePresence, motion } from 'motion/react'
 import { Sparkles, ArrowRight } from 'lucide-react'
@@ -51,7 +53,7 @@ export default function ConsolePreview() {
               The request panel behaves like the tools you use daily. The AI panel is where DGS earns its
               name — it reads the response the way a pentester would and writes it up like a colleague.
             </p>
-            <Button variant="white" size="md" to="/signup" className="mt-5" rightIcon={<ArrowRight size={15} />}>
+            <Button variant="white" size="md" href="/signup" className="mt-5" rightIcon={<ArrowRight size={15} />}>
               Try it on your own API
             </Button>
           </Reveal>
@@ -100,7 +102,7 @@ export default function ConsolePreview() {
                   </AnimatePresence>
                 </div>
                 <div className="relative min-h-[300px] rounded-lg bg-ink-900 p-4 font-mono text-[12px] leading-[1.7] ring-1 ring-white/8">
-                  {stage === 'typing' && <p className="text-ink-400">// hit Send to see the response</p>}
+                  {stage === 'typing' && <p className="text-ink-400">{'// hit Send to see the response'}</p>}
                   {stage === 'sent' && (
                     <div className="space-y-2">
                       {[80, 60, 70, 40].map((w, i) => (
@@ -133,25 +135,32 @@ export default function ConsolePreview() {
                 </div>
                 <div className="relative min-h-[300px]">
                   <AnimatePresence mode="wait">
+                    <motion.div
+                      key={stage === 'analysing' || stage === 'report' ? stage : 'idle'}
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      exit={{ opacity: 0 }}
+                      transition={{ duration: 0.2 }}
+                    >
                     {(stage === 'typing' || stage === 'sent' || stage === 'response') && (
-                      <motion.div key="idle" exit={{ opacity: 0 }} className="flex h-full min-h-[300px] flex-col items-center justify-center rounded-lg border border-dashed border-white/10 text-center">
+                      <div className="flex h-full min-h-[300px] flex-col items-center justify-center rounded-lg border border-dashed border-white/10 text-center">
                         <p className="max-w-[240px] text-[13px] text-ink-300">
                           Waiting for a response to analyse.
                         </p>
-                      </motion.div>
+                      </div>
                     )}
                     {stage === 'analysing' && (
-                      <motion.div key="busy" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="flex min-h-[300px] flex-col items-center justify-center gap-4">
+                      <div className="flex min-h-[300px] flex-col items-center justify-center gap-4">
                         <div className="relative h-16 w-16">
                           <span className="absolute inset-0 animate-ping rounded-full bg-brand-500/30" />
                           <span className="absolute inset-2 rounded-full border-2 border-brand-400 border-t-transparent animate-spin" />
                           <Sparkles size={18} className="absolute inset-0 m-auto text-brand-200" />
                         </div>
                         <ThinkingLines />
-                      </motion.div>
+                      </div>
                     )}
                     {stage === 'report' && (
-                      <motion.div key="report" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="space-y-3">
+                      <div className="space-y-3">
                         <div className="flex items-center gap-4 rounded-lg bg-ink-900 p-3 ring-1 ring-white/8">
                           <ScoreRing value={sampleAnalysis.score} />
                           <div>
@@ -187,8 +196,9 @@ export default function ConsolePreview() {
                           <span>+4 more findings · 5 suggestions</span>
                           <span className="text-brand-300">Export PDF ↗</span>
                         </motion.div>
-                      </motion.div>
+                      </div>
                     )}
+                    </motion.div>
                   </AnimatePresence>
                 </div>
               </div>

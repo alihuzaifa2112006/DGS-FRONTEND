@@ -1,3 +1,5 @@
+'use client'
+
 import type { ReactNode } from 'react'
 import { Reveal } from '@/components/ui/Reveal'
 import { motion } from 'motion/react'

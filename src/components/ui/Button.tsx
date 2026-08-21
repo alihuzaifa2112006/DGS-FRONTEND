@@ -1,5 +1,7 @@
+'use client'
+
 import { forwardRef, type ButtonHTMLAttributes, type ReactNode } from 'react'
-import { Link } from 'react-router-dom'
+import Link from 'next/link'
 import { cn } from '@/lib/utils'
 
 type Variant = 'primary' | 'ink' | 'ghost' | 'outline' | 'white' | 'danger'
@@ -30,15 +32,17 @@ const sizes: Record<Size, string> = {
 export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: Variant
   size?: Size
-  to?: string
+  /** Renders the button as a link. Internal paths use next/link, external/mailto use <a>. */
   href?: string
   loading?: boolean
   leftIcon?: ReactNode
   rightIcon?: ReactNode
 }
 
+const isExternal = (href: string) => /^(https?:|mailto:|tel:|#)/.test(href)
+
 export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button(
-  { className, variant = 'primary', size = 'md', to, href, loading, leftIcon, rightIcon, children, ...props },
+  { className, variant = 'primary', size = 'md', href, loading, leftIcon, rightIcon, children, ...props },
   ref,
 ) {
   const cls = cn(base, variants[variant], sizes[size], className)
@@ -49,20 +53,19 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
       {!loading && rightIcon}
     </>
   )
-  if (to) {
-    return (
-      <Link to={to} className={cls}>
+
+  if (href) {
+    return isExternal(href) ? (
+      <a href={href} className={cls}>
+        {inner}
+      </a>
+    ) : (
+      <Link href={href} className={cls}>
         {inner}
       </Link>
     )
   }
-  if (href) {
-    return (
-      <a href={href} className={cls}>
-        {inner}
-      </a>
-    )
-  }
+
   return (
     <button ref={ref} className={cls} disabled={loading || props.disabled} {...props}>
       {inner}

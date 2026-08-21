@@ -1,5 +1,7 @@
+'use client'
+
 import { useEffect, useState } from 'react'
-import { Link } from 'react-router-dom'
+import Link from 'next/link'
 import { AnimatePresence, motion } from 'motion/react'
 import { ArrowUpRight, Menu, X } from 'lucide-react'
 import Logo from '@/components/Logo'
@@ -37,9 +39,9 @@ export default function Nav() {
             AI Engine v2 now explains <em className="font-display not-italic text-white">why</em> an endpoint is weak — not just that it is.
           </p>
           <div className="hidden shrink-0 items-center gap-3 sm:flex">
-            <Link to="/login" className="hover:text-white">Log in</Link>
+            <Link href="/login" className="hover:text-white">Log in</Link>
             <span className="text-ink-500">/</span>
-            <Link to="/help" className="hover:text-white">Help center</Link>
+            <Link href="/help" className="hover:text-white">Help center</Link>
           </div>
         </div>
       </div>
@@ -68,10 +70,10 @@ export default function Nav() {
           </ul>
 
           <div className="hidden items-center gap-2 lg:flex">
-            <Button variant="ghost" size="sm" to="/login">
+            <Button variant="ghost" size="sm" href="/login">
               Log in
             </Button>
-            <Button size="sm" to="/signup" rightIcon={<ArrowUpRight size={15} />}>
+            <Button size="sm" href="/signup" rightIcon={<ArrowUpRight size={15} />}>
               Launch console
             </Button>
           </div>
@@ -107,8 +109,8 @@ export default function Nav() {
                   ))}
                 </ul>
                 <div className="mt-4 grid grid-cols-2 gap-2">
-                  <Button variant="outline" to="/login">Log in</Button>
-                  <Button to="/signup">Launch console</Button>
+                  <Button variant="outline" href="/login">Log in</Button>
+                  <Button href="/signup">Launch console</Button>
                 </div>
               </div>
             </motion.div>

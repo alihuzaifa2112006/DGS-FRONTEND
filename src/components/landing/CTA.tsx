@@ -28,10 +28,10 @@ export default function CTA() {
               Free tier, no card. Your first finding usually lands within a minute of signing up.
             </p>
             <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
-              <Button size="lg" to="/signup" rightIcon={<ArrowRight size={17} />}>
+              <Button size="lg" href="/signup" rightIcon={<ArrowRight size={17} />}>
                 Create free account
               </Button>
-              <Button size="lg" variant="white" to="/login">
+              <Button size="lg" variant="white" href="/login">
                 I have an account
               </Button>
             </div>

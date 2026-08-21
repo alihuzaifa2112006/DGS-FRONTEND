@@ -1,3 +1,5 @@
+'use client'
+
 import { useEffect, useState } from 'react'
 import { motion } from 'motion/react'
 import { ArrowRight, Check, X, Minus } from 'lucide-react'
@@ -33,7 +35,7 @@ export default function WebsiteScanSection() {
                 </li>
               ))}
             </ul>
-            <Button className="mt-7" to="/signup" rightIcon={<ArrowRight size={16} />}>
+            <Button className="mt-7" href="/signup" rightIcon={<ArrowRight size={16} />}>
               Scan a website
             </Button>
           </Reveal>

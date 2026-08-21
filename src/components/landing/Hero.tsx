@@ -1,3 +1,5 @@
+'use client'
+
 import { motion } from 'motion/react'
 import { ArrowRight, PlayCircle } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
@@ -39,7 +41,7 @@ export default function Hero() {
           </motion.p>
 
           <motion.div variants={item} className="mt-8 flex flex-col gap-3 sm:flex-row sm:items-center">
-            <Button size="lg" to="/signup" rightIcon={<ArrowRight size={17} />}>
+            <Button size="lg" href="/signup" rightIcon={<ArrowRight size={17} />}>
               Start guarding for free
             </Button>
             <Button size="lg" variant="outline" href="#console" leftIcon={<PlayCircle size={18} className="text-brand-600" />}>

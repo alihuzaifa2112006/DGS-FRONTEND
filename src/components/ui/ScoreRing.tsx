@@ -1,3 +1,5 @@
+'use client'
+
 import { motion } from 'motion/react'
 
 const scoreColor = (v: number) => (v >= 75 ? '#34d399' : v >= 55 ? '#fbbf24' : '#f87171')

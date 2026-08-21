@@ -1,4 +1,4 @@
-import { Link } from 'react-router-dom'
+import Link from 'next/link'
 import { cn } from '@/lib/utils'
 
 /**
@@ -32,18 +32,18 @@ export function LogoMark({ className, size = 36 }: { className?: string; size?: 
 
 export default function Logo({
   tone = 'light',
-  to = '/',
+  href = '/',
   compact = false,
   className,
 }: {
   tone?: 'light' | 'dark'
-  to?: string
+  href?: string
   compact?: boolean
   className?: string
 }) {
   const dark = tone === 'dark'
   return (
-    <Link to={to} className={cn('group inline-flex items-center gap-2.5', className)} aria-label="DGS home">
+    <Link href={href} className={cn('group inline-flex items-center gap-2.5', className)} aria-label="DGS home">
       <span className="relative">
         <LogoMark size={34} className="transition-transform duration-500 group-hover:rotate-[-6deg]" />
         <span className="absolute -inset-1 -z-10 rounded-2xl bg-brand-500/0 blur-md transition group-hover:bg-brand-500/30" />

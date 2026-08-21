@@ -1,3 +1,5 @@
+'use client'
+
 import { useState } from 'react'
 import { Check } from 'lucide-react'
 import { Reveal } from '@/components/ui/Reveal'
@@ -11,7 +13,7 @@ const plans = [
     tag: 'For trying it out',
     features: ['50 AI analyses / month', '3 website scans', 'PDF export (watermarked)', 'Request history 7 days'],
     cta: 'Start free',
-    to: '/signup',
+    href: '/signup',
   },
   {
     name: 'Pro',
@@ -19,7 +21,7 @@ const plans = [
     tag: 'For developers & freelancers',
     features: ['Unlimited AI analyses', '40 website scans', 'Branded PDF reports', 'Collections & environments', 'Priority engine queue'],
     cta: 'Go Pro',
-    to: '/signup?plan=pro',
+    href: '/signup?plan=pro',
     featured: true,
   },
   {
@@ -28,7 +30,7 @@ const plans = [
     tag: 'For agencies & SOC teams',
     features: ['Everything in Pro', 'Unlimited website scans', 'Shared workspaces', 'SSO & audit log', 'API access & webhooks'],
     cta: 'Talk to us',
-    to: '/signup?plan=team',
+    href: '/signup?plan=team',
   },
 ]
 
@@ -90,7 +92,7 @@ export default function Pricing() {
                   </li>
                 ))}
               </ul>
-              <Button variant={p.featured ? 'primary' : 'outline'} to={p.to} className="mt-7 w-full">
+              <Button variant={p.featured ? 'primary' : 'outline'} href={p.href} className="mt-7 w-full">
                 {p.cta}
               </Button>
             </div>

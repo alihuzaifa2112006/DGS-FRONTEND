@@ -1,4 +1,27 @@
-# Logs
+# dependencies
+node_modules
+.pnp
+.pnp.*
+.yarn/*
+!.yarn/patches
+!.yarn/releases
+!.yarn/versions
+
+# next.js
+/.next/
+/out/
+next-env.d.ts
+
+# production / build output
+/build
+/dist
+
+# misc
+.DS_Store
+*.pem
+*.tsbuildinfo
+
+# debug
 logs
 *.log
 npm-debug.log*
@@ -7,18 +30,23 @@ yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
 
-node_modules
-dist
-dist-ssr
-*.local
+# env files
+.env
+.env*.local
 
-# Editor directories and files
+# vercel
+.vercel
+
+# editors
 .vscode/*
 !.vscode/extensions.json
 .idea
-.DS_Store
 *.suo
 *.ntvs*
 *.njsproj
 *.sln
 *.sw?
+
+# generated agent docs (next 16 writes these)
+/AGENTS.md
+/CLAUDE.md
