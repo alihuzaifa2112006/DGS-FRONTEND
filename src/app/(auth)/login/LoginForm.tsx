@@ -2,28 +2,56 @@
 
 import { useState, type FormEvent } from 'react'
 import Link from 'next/link'
-import { useRouter } from 'next/navigation'
-import { Mail, LockKeyhole, ArrowRight } from 'lucide-react'
+import { useRouter, useSearchParams } from 'next/navigation'
+import { Mail, LockKeyhole, ArrowRight, AlertTriangle } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import { Field } from '@/components/ui/Field'
-import { wait } from '@/lib/mock'
-import { setSession } from '@/lib/session'
-import { SocialRow, Divider } from '@/components/auth/SocialRow'
+import { apiPost, ApiClientError } from '@/lib/api'
+import { applySession, type AuthUser } from '@/lib/session'
 
 export default function Login() {
   const router = useRouter()
+  const params = useSearchParams()
   const [loading, setLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+  const [formError, setFormError] = useState<string | null>(null)
+  const [fields, setFields] = useState<Record<string, string>>({})
 
   async function onSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault()
-    setError(null)
+    setFormError(null)
+    setFields({})
+
     const data = new FormData(e.currentTarget)
-    if (!String(data.get('email')).includes('@')) return setError('Enter a valid email address.')
+    const email = String(data.get('email') ?? '').trim()
+    const password = String(data.get('password') ?? '')
+
+    if (!email.includes('@')) return setFields({ email: 'Enter a valid email address.' })
+    if (!password) return setFields({ password: 'Enter your password.' })
+
     setLoading(true)
-    await wait(900) // UI-only: swap for real auth call
-    setSession({ email: String(data.get('email')), at: Date.now() })
-    router.push('/app')
+    try {
+      const { user } = await apiPost<{ user: AuthUser }>('/api/auth/login', {
+        email,
+        password,
+        remember: data.get('remember') === 'on',
+      })
+      applySession(user)
+
+      // `next` comes from middleware when it intercepted a protected page.
+      // Only same-site paths are honoured, so a crafted ?next=https://evil
+      // cannot turn our login screen into an open redirect.
+      const next = params.get('next')
+      router.replace(next && next.startsWith('/') && !next.startsWith('//') ? next : '/app')
+      router.refresh()
+    } catch (err) {
+      if (err instanceof ApiClientError) {
+        if (err.fields) setFields(err.fields)
+        else setFormError(err.message)
+      } else {
+        setFormError('Something went wrong. Please try again.')
+      }
+      setLoading(false)
+    }
   }
 
   return (
@@ -39,11 +67,28 @@ export default function Login() {
         </Link>
       </p>
 
-      <SocialRow className="mt-8" />
-      <Divider />
 
-      <form onSubmit={onSubmit} className="space-y-4" noValidate>
-        <Field name="email" type="email" label="Email" placeholder="you@company.com" icon={<Mail size={16} />} autoComplete="email" required error={error ?? undefined} />
+      {formError && (
+        <div
+          role="alert"
+          className="mt-8 -mb-2 flex items-start gap-2.5 rounded-lg bg-red-50 p-3 text-[13px] text-red-700 ring-1 ring-red-200"
+        >
+          <AlertTriangle size={16} className="mt-0.5 shrink-0" />
+          <span>{formError}</span>
+        </div>
+      )}
+
+      <form onSubmit={onSubmit} className="mt-8 space-y-4" noValidate>
+        <Field
+          name="email"
+          type="email"
+          label="Email"
+          placeholder="you@company.com"
+          icon={<Mail size={16} />}
+          autoComplete="email"
+          required
+          error={fields.email}
+        />
         <Field
           name="password"
           type="password"
@@ -57,9 +102,15 @@ export default function Login() {
           icon={<LockKeyhole size={16} />}
           autoComplete="current-password"
           required
+          error={fields.password}
         />
         <label className="flex items-center gap-2 text-[13px] text-ink-600">
-          <input type="checkbox" name="remember" defaultChecked className="h-4 w-4 rounded border-ink-300 accent-brand-600" />
+          <input
+            type="checkbox"
+            name="remember"
+            defaultChecked
+            className="h-4 w-4 rounded border-ink-300 accent-brand-600"
+          />
           Keep me signed in on this device
         </label>
         <Button type="submit" size="lg" className="w-full" loading={loading} rightIcon={<ArrowRight size={16} />}>
@@ -67,7 +118,9 @@ export default function Login() {
         </Button>
       </form>
 
-      <p className="mt-6 text-center font-mono text-[11px] text-ink-400">Protected by rate limiting & device checks.</p>
+      <p className="mt-6 text-center font-mono text-[11px] text-ink-400">
+        Protected by rate limiting &amp; device checks.
+      </p>
     </>
   )
 }

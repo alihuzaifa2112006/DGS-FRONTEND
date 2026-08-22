@@ -7,7 +7,7 @@ import { ScoreRing } from '@/components/ui/ScoreRing'
 import { Button } from '@/components/ui/Button'
 import { FindingsList, ChecksGrid } from './Findings'
 import { SeverityBadge } from './SeverityBadge'
-import type { AiAnalysis } from '@/lib/mock'
+import type { AiAnalysis } from '@/lib/security'
 import { cn } from '@/lib/utils'
 
 export type AiState = 'idle' | 'thinking' | 'done'

@@ -4,7 +4,7 @@ import { useState, type ReactNode } from 'react'
 import { AnimatePresence, motion } from 'motion/react'
 import { ChevronDown, Copy, Check, Wrench } from 'lucide-react'
 import { SeverityBadge } from './SeverityBadge'
-import { severityMeta, type Finding, type Severity } from '@/lib/mock'
+import { severityMeta, type Finding, type Severity } from '@/lib/security'
 import { cn } from '@/lib/utils'
 
 /** Expandable, filterable list of findings. */

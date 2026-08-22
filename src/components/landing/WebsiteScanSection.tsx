@@ -5,7 +5,7 @@ import { motion } from 'motion/react'
 import { ArrowRight, Check, X, Minus } from 'lucide-react'
 import { Reveal } from '@/components/ui/Reveal'
 import { Button } from '@/components/ui/Button'
-import { scanSteps, sampleSiteScan } from '@/lib/mock'
+import { scanSteps, sampleSiteScan } from '@/lib/demo'
 
 export default function WebsiteScanSection() {
   const [active, setActive] = useState(0)

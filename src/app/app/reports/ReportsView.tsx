@@ -8,16 +8,20 @@ import { Button } from '@/components/ui/Button'
 import { MethodChip } from '@/components/console/SeverityBadge'
 import { FindingsList } from '@/components/console/Findings'
 import { toast } from '@/lib/toast'
-import { sampleReports, sampleAnalysis, sampleSiteScan, type Report } from '@/lib/mock'
+import { type Report } from '@/lib/security'
 import { cn, timeAgo } from '@/lib/utils'
+import { useConfirm } from '@/components/ui/ConfirmDialog'
 
 type Filter = 'all' | 'api' | 'website'
 
 export default function Reports() {
   const [q, setQ] = useState('')
   const [filter, setFilter] = useState<Filter>('all')
-  const [items, setItems] = useState<Report[]>(sampleReports)
+  // Reports are not persisted yet. This list stays empty until an audit
+  // actually runs and writes one — see the empty state below.
+  const [items, setItems] = useState<Report[]>([])
   const [preview, setPreview] = useState<Report | null>(null)
+  const confirm = useConfirm()
 
   const shown = useMemo(
     () => items.filter((r) => (filter === 'all' || r.type === filter) && (r.name + r.target + r.id).toLowerCase().includes(q.toLowerCase())),
@@ -130,7 +134,25 @@ export default function Reports() {
                   <IconBtn title="Download PDF" onClick={() => toast('Download started', { kind: 'info', body: `${r.id}.pdf` })}>
                     <FileDown size={15} />
                   </IconBtn>
-                  <IconBtn title="Delete" onClick={() => remove(r.id)} danger>
+                  <IconBtn
+                    title="Delete"
+                    onClick={() =>
+                      confirm.ask(
+                        {
+                          title: 'Delete this report?',
+                          message: (
+                            <>
+                              <span className="font-semibold text-white">{r.name}</span> will be permanently deleted.
+                              This cannot be undone.
+                            </>
+                          ),
+                          confirmLabel: 'Delete report',
+                        },
+                        () => remove(r.id),
+                      )
+                    }
+                    danger
+                  >
                     <Trash2 size={15} />
                   </IconBtn>
                 </div>
@@ -139,8 +161,20 @@ export default function Reports() {
           </AnimatePresence>
         </ul>
         {shown.length === 0 && (
-          <div className="p-10 text-center text-[13px] text-ink-300">
-            No reports match “{q}”.
+          <div className="flex flex-col items-center px-6 py-14 text-center">
+            <span className="flex h-12 w-12 items-center justify-center rounded-full bg-white/5 text-brand-300 ring-1 ring-white/10">
+              <FileText size={22} />
+            </span>
+            {items.length === 0 ? (
+              <>
+                <h2 className="mt-4 text-[15px] font-bold">No reports yet</h2>
+                <p className="mt-1.5 max-w-sm text-[13px] text-ink-300">
+                  Run an API audit or a website scan and the exported report lands here.
+                </p>
+              </>
+            ) : (
+              <p className="mt-4 text-[13px] text-ink-300">No reports match “{q}”.</p>
+            )}
           </div>
         )}
       </div>
@@ -177,17 +211,25 @@ export default function Reports() {
                   <div>
                     <p className="font-mono text-[12px] text-ink-200">{preview.target}</p>
                     <p className="mt-1.5 text-[13px] leading-relaxed text-ink-100">
-                      {preview.type === 'api' ? sampleAnalysis.summary : `Scan of ${preview.target}: ${sampleSiteScan.findings.length} findings across access control, headers and API exposure.`}
+                      {preview.summary ?? 'No stored summary for this report.'}
                     </p>
                   </div>
                 </div>
                 <p className="eyebrow mb-2 mt-5 text-ink-400">Findings</p>
-                <FindingsList findings={preview.type === 'api' ? sampleAnalysis.findings : sampleSiteScan.findings} />
+                {preview.detail?.length ? (
+                  <FindingsList findings={preview.detail} />
+                ) : (
+                  <p className="rounded-lg bg-ink-800 p-4 text-[13px] text-ink-300 ring-1 ring-white/8">
+                    This report has no stored findings.
+                  </p>
+                )}
               </div>
             </motion.aside>
           </>
         )}
       </AnimatePresence>
+
+      <confirm.Dialog />
     </div>
   )
 }

@@ -1,80 +1,29 @@
 /* ------------------------------------------------------------------
-   Mock data + types. UI-only for now — every "engine" call resolves
-   from here with a small delay so animations have something to show.
+   Demo content — NOT user data.
+
+   Two legitimate uses only:
+     1. the self-driving animations on the marketing pages, and
+     2. the prefilled example request in the API Tester.
+
+   Nothing in the console reads from this file. If a screen needs to
+   show a user's results, it fetches them.
    ------------------------------------------------------------------ */
 
-export type Severity = 'critical' | 'high' | 'medium' | 'low' | 'info'
+import type { AiAnalysis, ScanStep, SiteScanResult } from '@/lib/security'
 
-export interface Finding {
-  id: string
-  title: string
-  severity: Severity
-  category: string
-  cwe?: string
-  owasp?: string
-  description: string
-  evidence?: string
-  fix: string
-  effort: 'low' | 'medium' | 'high'
-}
-
-export interface AiAnalysis {
-  score: number // 0-100 (higher = safer)
-  grade: 'A' | 'B' | 'C' | 'D' | 'F'
-  summary: string
-  attackSurface: { label: string; value: string; risk: Severity }[]
-  findings: Finding[]
-  suggestions: string[]
-  checks: { name: string; status: 'pass' | 'fail' | 'warn' }[]
-}
-
-export const severityMeta: Record<Severity, { label: string; text: string; bg: string; dot: string; rank: number }> = {
-  critical: { label: 'Critical', text: 'text-red-300', bg: 'bg-red-500/15 ring-red-500/30', dot: 'bg-red-400', rank: 0 },
-  high: { label: 'High', text: 'text-orange-300', bg: 'bg-orange-500/15 ring-orange-500/30', dot: 'bg-orange-400', rank: 1 },
-  medium: { label: 'Medium', text: 'text-amber-300', bg: 'bg-amber-500/15 ring-amber-500/30', dot: 'bg-amber-400', rank: 2 },
-  low: { label: 'Low', text: 'text-sky-300', bg: 'bg-sky-500/15 ring-sky-500/30', dot: 'bg-sky-400', rank: 3 },
-  info: { label: 'Info', text: 'text-ink-200', bg: 'bg-white/8 ring-white/15', dot: 'bg-ink-300', rank: 4 },
-}
-
-export const gradeFor = (score: number): AiAnalysis['grade'] =>
-  score >= 90 ? 'A' : score >= 75 ? 'B' : score >= 60 ? 'C' : score >= 40 ? 'D' : 'F'
-
+/**
+ * Prefill for the request builder.
+ *
+ * Points at a real public endpoint that actually answers, so the first Send
+ * a new user presses returns a genuine response instead of a DNS failure.
+ * No fake credentials — this is an example, not a scenario.
+ */
 export const sampleRequest = {
-  method: 'POST',
-  url: 'https://api.acme-shop.dev/v1/auth/login',
-  headers: [
-    { key: 'Content-Type', value: 'application/json', on: true },
-    { key: 'Accept', value: 'application/json', on: true },
-    { key: 'X-Client', value: 'dgs-console/1.0', on: true },
-  ],
-  params: [{ key: 'include', value: 'profile', on: true }],
-  body: JSON.stringify(
-    { email: 'sara@acme-shop.dev', password: 'hunter2', remember: true },
-    null,
-    2,
-  ),
-}
-
-export const sampleResponse = {
-  status: 200,
-  statusText: 'OK',
-  timeMs: 412,
-  sizeKb: 1.9,
-  headers: {
-    'content-type': 'application/json; charset=utf-8',
-    server: 'nginx/1.18.0 (Ubuntu)',
-    'x-powered-by': 'Express',
-    'set-cookie': 'session=eyJhbGciOi...; Path=/',
-    'access-control-allow-origin': '*',
-    date: 'Wed, 19 Aug 2026 09:41:12 GMT',
-  },
-  body: {
-    ok: true,
-    user: { id: 1042, email: 'sara@acme-shop.dev', role: 'admin', password_hash: '$2b$10$e0NRxu2vT…' },
-    token: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOjEwNDIsInJvbGUiOiJhZG1pbiJ9.k3n…',
-    expires_in: 31536000,
-    debug: { query: 'SELECT * FROM users WHERE email = ?', took_ms: 3 },
-  },
+  method: 'GET',
+  url: 'https://jsonplaceholder.typicode.com/posts/1',
+  headers: [{ key: 'Accept', value: 'application/json', on: true }],
+  params: [] as { key: string; value: string; on: boolean }[],
+  body: '',
 }
 
 export const sampleAnalysis: AiAnalysis = {
@@ -205,12 +154,6 @@ export const sampleAnalysis: AiAnalysis = {
 
 /* ---------------- Website scan ---------------- */
 
-export interface ScanStep {
-  id: string
-  label: string
-  detail: string
-}
-
 export const scanSteps: ScanStep[] = [
   { id: 'dns', label: 'Resolving DNS & CDN', detail: 'A/AAAA · CNAME · edge provider' },
   { id: 'tls', label: 'TLS handshake & certificate', detail: 'chain · expiry · cipher suites' },
@@ -220,17 +163,6 @@ export const scanSteps: ScanStep[] = [
   { id: 'vuln', label: 'Vulnerability heuristics', detail: 'XSS · open redirect · IDOR probes' },
   { id: 'ai', label: 'AI Engine reasoning', detail: 'correlating signals · ranking risk' },
 ]
-
-export interface SiteScanResult {
-  url: string
-  score: number
-  grade: AiAnalysis['grade']
-  tech: string[]
-  tls: { valid: boolean; issuer: string; expiresInDays: number; protocol: string }
-  headers: { name: string; present: boolean; value?: string; weight: number }[]
-  endpoints: { method: string; path: string; risk: Severity }[]
-  findings: Finding[]
-}
 
 export const sampleSiteScan: SiteScanResult = {
   url: 'https://acme-shop.dev',
@@ -318,26 +250,3 @@ export const sampleSiteScan: SiteScanResult = {
 }
 
 /* ---------------- Reports ---------------- */
-
-export interface Report {
-  id: string
-  name: string
-  type: 'api' | 'website'
-  target: string
-  score: number
-  findings: number
-  critical: number
-  createdAt: string
-  pages: number
-}
-
-export const sampleReports: Report[] = [
-  { id: 'RPT-2041', name: 'Login endpoint audit', type: 'api', target: 'POST /v1/auth/login', score: 42, findings: 8, critical: 1, createdAt: '2026-08-19T09:41:00Z', pages: 9 },
-  { id: 'RPT-2040', name: 'acme-shop.dev full scan', type: 'website', target: 'https://acme-shop.dev', score: 68, findings: 6, critical: 1, createdAt: '2026-08-18T16:02:00Z', pages: 14 },
-  { id: 'RPT-2037', name: 'Payments webhook', type: 'api', target: 'POST /v1/webhooks/stripe', score: 81, findings: 3, critical: 0, createdAt: '2026-08-17T11:20:00Z', pages: 6 },
-  { id: 'RPT-2033', name: 'Public catalogue', type: 'api', target: 'GET /v1/products', score: 93, findings: 1, critical: 0, createdAt: '2026-08-15T08:05:00Z', pages: 4 },
-  { id: 'RPT-2029', name: 'portal.itginnovators.com', type: 'website', target: 'https://portal.itginnovators.com', score: 77, findings: 4, critical: 0, createdAt: '2026-08-12T13:44:00Z', pages: 11 },
-  { id: 'RPT-2021', name: 'User profile PATCH', type: 'api', target: 'PATCH /v1/users/:id', score: 55, findings: 5, critical: 1, createdAt: '2026-08-09T10:12:00Z', pages: 8 },
-]
-
-export const wait = (ms: number) => new Promise((r) => setTimeout(r, ms))

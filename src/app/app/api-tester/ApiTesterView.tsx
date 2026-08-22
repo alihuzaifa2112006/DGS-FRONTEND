@@ -10,7 +10,12 @@ import { AiPanel, type AiState } from '@/components/console/AiPanel'
 import { ExportModal } from '@/components/console/ExportModal'
 import { Button } from '@/components/ui/Button'
 import { toast } from '@/lib/toast'
-import { sampleRequest, sampleResponse, sampleAnalysis, wait, type AiAnalysis } from '@/lib/mock'
+import { gradeFor, type AiAnalysis } from '@/lib/security'
+import { auditApiResponse } from '@/lib/scan/api-response'
+import type { Advice } from '@/lib/scan/advice'
+import { sampleRequest } from '@/lib/demo'
+import { apiPost, ApiClientError } from '@/lib/api'
+import type { ProxyResult } from '@/app/api/tools/http/route'
 import { cn, formatBytes, tryPrettyJson } from '@/lib/utils'
 
 const METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS'] as const
@@ -24,19 +29,50 @@ interface Resp {
   timeMs: number
   size: number
   headers: Record<string, string>
+  cookies: string[]
   body: string
-  live: boolean
-  note?: string
+  truncated: boolean
+  redirects: string[]
+  finalUrl: string
+  resolvedTo: string[]
 }
 
-const history = [
-  { method: 'POST', url: 'https://api.acme-shop.dev/v1/auth/login', when: '2m', score: 42 },
-  { method: 'GET', url: 'https://api.acme-shop.dev/v1/products?limit=50', when: '1h', score: 93 },
-  { method: 'PATCH', url: 'https://api.acme-shop.dev/v1/users/1042', when: '3h', score: 55 },
-  { method: 'POST', url: 'https://api.acme-shop.dev/v1/webhooks/stripe', when: '1d', score: 81 },
-  { method: 'GET', url: 'https://portal.itginnovators.com/api/me', when: '2d', score: 77 },
-  { method: 'DELETE', url: 'https://api.acme-shop.dev/v1/cart/77', when: '3d', score: 64 },
-]
+/** One entry per request actually sent in this browser session. */
+interface HistoryEntry {
+  id: number
+  method: Method
+  url: string
+  status: number
+  at: number
+}
+
+/**
+ * Reads the correct method off a 405 response.
+ *
+ * An endpoint that only accepts POST answers a GET with 405 and an `Allow`
+ * header listing what it does take. That is the server telling us exactly
+ * what the user meant — so we switch and retry instead of making them
+ * work it out from a status code.
+ */
+function methodFromAllowHeader(
+  headers: Record<string, string>,
+  current: Method,
+): Method | null {
+  const allow = Object.entries(headers).find(([k]) => k.toLowerCase() === 'allow')?.[1]
+  if (!allow) return null
+
+  const allowed = allow
+    .split(',')
+    .map((m) => m.trim().toUpperCase())
+    .filter((m): m is Method => (METHODS as readonly string[]).includes(m))
+    // HEAD and OPTIONS are almost never what someone was reaching for.
+    .filter((m) => m !== 'HEAD' && m !== 'OPTIONS' && m !== current)
+
+  if (allowed.length === 0) return null
+  // Prefer a body-carrying verb when several are offered — that is the
+  // usual intent behind hitting an endpoint that rejected GET.
+  return allowed.find((m) => m === 'POST') ?? allowed[0]!
+}
 
 const statusTone = (s: number) =>
   s >= 500 ? 'bg-red-500/20 text-red-300 ring-red-500/30' : s >= 400 ? 'bg-amber-500/20 text-amber-300 ring-amber-500/30' : s >= 300 ? 'bg-sky-500/20 text-sky-300 ring-sky-500/30' : 'bg-emerald-500/20 text-emerald-300 ring-emerald-500/30'
@@ -62,7 +98,11 @@ export default function ApiTester() {
   const [aiState, setAiState] = useState<AiState>('idle')
   const [analysis, setAnalysis] = useState<AiAnalysis | null>(null)
   const [exportOpen, setExportOpen] = useState(false)
-  const [showHistory, setShowHistory] = useState(true)
+  // Collapsed by default. Three columns on a 1280px laptop leaves the
+  // request builder — the thing people actually use — squeezed to nothing.
+  const [showHistory, setShowHistory] = useState(false)
+  // Not persisted anywhere yet — this is what has been sent since the page loaded.
+  const [history, setHistory] = useState<HistoryEntry[]>([])
   const [methodOpen, setMethodOpen] = useState(false)
   const methodRef = useRef<HTMLDivElement>(null)
 
@@ -77,7 +117,7 @@ export default function ApiTester() {
   // Ctrl/⌘ + Enter sends
   useEffect(() => {
     const h = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') send()
+      if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') void send()
     }
     window.addEventListener('keydown', h)
     return () => window.removeEventListener('keydown', h)
@@ -86,42 +126,91 @@ export default function ApiTester() {
 
   const hasBody = !['GET', 'HEAD'].includes(method)
 
-  async function send() {
+  async function send(override?: { method?: Method; isAutoRetry?: boolean }) {
     if (!url.trim()) return toast('Enter a URL first', { kind: 'error' })
+    const useMethod = override?.method ?? method
     setSending(true)
     setResp(null)
     setAiState('idle')
     setAnalysis(null)
-    const t0 = performance.now()
+
     try {
-      const u = new URL(url)
+      // Build the final URL client-side so the query string the user sees in
+      // the params tab is exactly what gets sent.
+      let target = url.trim()
+      if (!/^[a-z][a-z0-9+.-]*:/i.test(target)) target = `https://${target}`
+      const u = new URL(target)
       params.filter((p) => p.on && p.key).forEach((p) => u.searchParams.set(p.key, p.value))
+
       const h: Record<string, string> = {}
       headers.filter((x) => x.on && x.key).forEach((x) => (h[x.key] = x.value))
       if (auth.type === 'bearer' && auth.token) h['Authorization'] = `Bearer ${auth.token}`
       if (auth.type === 'basic' && auth.user) h['Authorization'] = `Basic ${btoa(`${auth.user}:${auth.pass}`)}`
       if (auth.type === 'apikey' && auth.token) h[auth.keyName || 'X-API-Key'] = auth.token
-      const ctrl = new AbortController()
-      const to = window.setTimeout(() => ctrl.abort(), 10000)
-      const res = await fetch(u.toString(), { method, headers: h, body: hasBody ? body : undefined, signal: ctrl.signal })
-      window.clearTimeout(to)
-      const text = await res.text()
-      const rh: Record<string, string> = {}
-      res.headers.forEach((v, k) => (rh[k] = v))
-      setResp({ status: res.status, statusText: res.statusText || statusName(res.status), timeMs: Math.round(performance.now() - t0), size: new Blob([text]).size, headers: rh, body: tryPrettyJson(text), live: true })
-    } catch {
-      // Browser-blocked (CORS / network / invalid URL) → show a representative sample so the flow still works.
-      await wait(500)
-      setResp({
-        status: sampleResponse.status,
-        statusText: sampleResponse.statusText,
-        timeMs: sampleResponse.timeMs,
-        size: Math.round(sampleResponse.sizeKb * 1024),
-        headers: sampleResponse.headers,
-        body: JSON.stringify(sampleResponse.body, null, 2),
-        live: false,
-        note: 'The browser blocked the live request (CORS / network). Showing a sample response — the DGS proxy will relay real traffic in the full build.',
+
+      // Relayed through our own server rather than fetched from the page.
+      // A browser fetch to a third-party host dies on CORS and can never
+      // read Set-Cookie; the proxy has neither limitation.
+      const sendsBody = !['GET', 'HEAD'].includes(useMethod)
+      const r = await apiPost<ProxyResult>('/api/tools/http', {
+        method: useMethod,
+        url: u.toString(),
+        headers: h,
+        body: sendsBody && body ? body : undefined,
       })
+
+      // The endpoint told us which verb it wants. Switch to it and resend
+      // once, rather than leaving the user staring at a 405. Guarded by
+      // isAutoRetry so a server that always answers 405 cannot loop us.
+      if (!override?.isAutoRetry && r.status === 405) {
+        const suggested = methodFromAllowHeader(r.headers, useMethod)
+        if (suggested) {
+          setMethod(suggested)
+          toast(`Switched to ${suggested}`, {
+            kind: 'info',
+            body: `This endpoint does not accept ${useMethod}. Resending as ${suggested}…`,
+          })
+          setSending(false)
+          return send({ method: suggested, isAutoRetry: true })
+        }
+        // 405 with no Allow header. The server has not said which verb it
+        // wants, and guessing would be worse than saying so.
+        toast(`${useMethod} is not allowed here`, {
+          kind: 'error',
+          body: 'The endpoint rejected this method but did not say which one it accepts. Try POST or GET.',
+        })
+      }
+
+      // A body on a verb that cannot carry one is almost always a mistake
+      // rather than an intent — worth flagging, not worth overriding.
+      if (!sendsBody && body.trim() && !override?.isAutoRetry) {
+        toast('Body ignored', {
+          kind: 'info',
+          body: `${useMethod} requests do not send a body. Switch to POST or PUT if you meant to.`,
+        })
+      }
+
+      setResp({
+        status: r.status,
+        statusText: r.statusText || statusName(r.status),
+        timeMs: r.timeMs,
+        size: r.size,
+        headers: r.headers,
+        cookies: r.cookies,
+        body: tryPrettyJson(r.body),
+        truncated: r.truncated,
+        redirects: r.redirects,
+        finalUrl: r.finalUrl,
+        resolvedTo: r.resolvedTo,
+      })
+
+      setHistory((prev) =>
+        [{ id: Date.now(), method: useMethod, url: u.toString(), status: r.status, at: Date.now() }, ...prev].slice(0, 25),
+      )
+    } catch (err) {
+      const message =
+        err instanceof ApiClientError ? (err.fieldError('url') ?? err.message) : 'The request could not be sent.'
+      toast('Request failed', { kind: 'error', body: message })
     } finally {
       setSending(false)
       setResTab('body')
@@ -131,20 +220,67 @@ export default function ApiTester() {
   async function analyse() {
     if (!resp) return
     setAiState('thinking')
-    await wait(2600)
-    setAnalysis(sampleAnalysis)
+
+    // The findings are derived from the real response here in the browser,
+    // so they exist with or without the advice service. The service only
+    // rewrites them into plain language.
+    const audit = auditApiResponse({
+      url: resp.finalUrl,
+      method,
+      status: resp.status,
+      headers: resp.headers,
+      cookies: resp.cookies,
+      body: resp.body,
+    })
+
+    let advice: Advice | null = null
+    try {
+      advice = await apiPost<Advice>('/api/tools/advice', {
+        target: resp.finalUrl,
+        kind: 'api',
+        score: audit.score,
+        grade: gradeFor(audit.score),
+        findings: audit.findings,
+        checks: audit.checks,
+      })
+    } catch {
+      // Non-fatal: show the findings without the narrative.
+    }
+
+    setAnalysis({
+      score: audit.score,
+      grade: gradeFor(audit.score),
+      summary: advice?.plain_summary ?? `${audit.findings.length} issue(s) found in this response.`,
+      attackSurface: audit.attackSurface,
+      findings: audit.findings,
+      suggestions: advice?.quick_wins ?? audit.findings.map((f) => f.fix).slice(0, 5),
+      checks: audit.checks.map((c) => ({ name: c.name, status: c.status })),
+    })
     setAiState('done')
-    toast('Analysis complete', { kind: 'success', body: `${sampleAnalysis.findings.length} findings · score ${sampleAnalysis.score}/100` })
+
+    toast('Analysis complete', {
+      kind: 'success',
+      body: `${audit.findings.length} findings · score ${audit.score}/100`,
+    })
   }
 
-  const flaggedKeys = useMemo(() => (aiState === 'done' ? ['password_hash', 'debug', 'expires_in', 'query'] : []), [aiState])
+  // Derived from the engine's own findings once it exists — never hardcoded.
+  const flaggedKeys = useMemo(
+    () => (aiState === 'done' && analysis ? analysis.findings.flatMap((f) => (f.evidence ? [f.evidence] : [])) : []),
+    [aiState, analysis],
+  )
   const cookies = useMemo(() => {
-    const sc = resp?.headers['set-cookie']
-    if (!sc) return []
-    return sc.split(/,(?=\s*\w+=)/).map((c) => {
+    // The proxy hands back each Set-Cookie header separately, so there is no
+    // need to guess where one cookie ends and the next begins — splitting a
+    // merged header on commas breaks on `Expires=Sat, 21 Aug ...`.
+    return (resp?.cookies ?? []).map((c) => {
       const [nv, ...attrs] = c.split(';')
-      const [name, value] = nv.split('=')
-      return { name: name.trim(), value: (value ?? '').trim(), attrs: attrs.map((a) => a.trim()).filter(Boolean) }
+      const eq = (nv ?? '').indexOf('=')
+      return {
+        name: (eq === -1 ? nv : nv.slice(0, eq)).trim(),
+        value: (eq === -1 ? '' : nv.slice(eq + 1)).trim(),
+        attrs: attrs.map((a) => a.trim()).filter(Boolean),
+      }
     })
   }, [resp])
 
@@ -169,20 +305,37 @@ export default function ApiTester() {
               </button>
             </div>
             <ul className="p-2">
+              {history.length === 0 && (
+                <li className="px-2 py-6 text-center text-[12px] leading-relaxed text-ink-400">
+                  Requests you send appear here for this session.
+                </li>
+              )}
               {history.map((h) => (
-                <li key={h.url}>
+                <li key={h.id}>
                   <button
                     onClick={() => {
-                      setMethod(h.method as Method)
+                      setMethod(h.method)
                       setUrl(h.url)
                     }}
                     className="group flex w-full flex-col gap-1 rounded-md px-2 py-2 text-left hover:bg-white/4"
                   >
                     <div className="flex items-center gap-2">
                       <MethodChip method={h.method} />
-                      <span className="ml-auto font-mono text-[10px] text-ink-400">{h.when}</span>
+                      <span
+                        className={cn(
+                          'rounded px-1 font-mono text-[10px] ring-1',
+                          statusTone(h.status),
+                        )}
+                      >
+                        {h.status}
+                      </span>
+                      <span className="ml-auto font-mono text-[10px] text-ink-400">
+                        {relativeTime(h.at)}
+                      </span>
                     </div>
-                    <span className="truncate font-mono text-[11.5px] text-ink-200 group-hover:text-white">{h.url.replace(/^https?:\/\//, '')}</span>
+                    <span className="truncate font-mono text-[11.5px] text-ink-200 group-hover:text-white">
+                      {h.url.replace(/^https?:\/\//, '')}
+                    </span>
                   </button>
                 </li>
               ))}
@@ -194,7 +347,7 @@ export default function ApiTester() {
       {/* ── workspace ── */}
       <div className="grid min-h-0 min-w-0 flex-1 grid-cols-1 gap-3 overflow-y-auto p-3 sm:p-4 lg:grid-cols-12 lg:overflow-hidden">
         {/* request + response column */}
-        <div className="flex min-h-0 flex-col gap-3 lg:col-span-7 lg:overflow-hidden xl:col-span-7">
+        <div className="flex min-h-0 flex-col gap-3 lg:col-span-8 lg:overflow-hidden xl:col-span-8">
           {/* url bar */}
           <div className="flex items-stretch gap-2">
             {!showHistory && (
@@ -243,7 +396,7 @@ export default function ApiTester() {
                 className="min-w-0 flex-1 bg-transparent px-3 font-mono text-[13px] text-white outline-none placeholder:text-ink-400"
               />
             </div>
-            <Button onClick={send} loading={sending} size="md" className="h-11 px-4" leftIcon={<Send size={15} />}>
+            <Button onClick={() => void send()} loading={sending} size="md" className="h-11 px-4" leftIcon={<Send size={15} />}>
               <span className="hidden sm:inline">Send</span>
             </Button>
             <Button
@@ -278,7 +431,7 @@ export default function ApiTester() {
                 </button>
               ))}
               <div className="ml-auto flex items-center gap-1 pr-1">
-                <button onClick={() => toast('Saved to collection', { kind: 'success', body: 'Acme Shop / Auth' })} className="rounded p-1.5 text-ink-300 hover:bg-white/5 hover:text-white" aria-label="Save request" title="Save">
+                <button onClick={() => toast('Collections are not available yet', { kind: 'info' })} className="rounded p-1.5 text-ink-300 hover:bg-white/5 hover:text-white" aria-label="Save request" title="Save">
                   <Save size={14} />
                 </button>
               </div>
@@ -360,9 +513,17 @@ export default function ApiTester() {
                     <span className="flex items-center gap-1">
                       <HardDrive size={11} /> {formatBytes(resp.size)}
                     </span>
-                    {!resp.live && (
-                      <span className="rounded bg-amber-500/15 px-1.5 py-0.5 text-amber-300 ring-1 ring-amber-500/30" title={resp.note}>
-                        sample
+                    {resp.redirects.length > 0 && (
+                      <span
+                        className="rounded bg-sky-500/15 px-1.5 py-0.5 text-sky-300 ring-1 ring-sky-500/30"
+                        title={[...resp.redirects, resp.finalUrl].join('  →  ')}
+                      >
+                        {resp.redirects.length} redirect{resp.redirects.length === 1 ? '' : 's'}
+                      </span>
+                    )}
+                    {resp.truncated && (
+                      <span className="rounded bg-amber-500/15 px-1.5 py-0.5 text-amber-300 ring-1 ring-amber-500/30" title="Response was larger than 2 MB and was cut off.">
+                        truncated
                       </span>
                     )}
                   </motion.div>
@@ -398,10 +559,10 @@ export default function ApiTester() {
                   ))}
                 </div>
               )}
-              {resp && resp.note && resTab === 'body' && (
+              {resp?.truncated && resTab === 'body' && (
                 <div className="mb-3 flex items-start gap-2 rounded-lg bg-amber-500/10 p-2.5 text-[12px] text-amber-100 ring-1 ring-amber-500/25">
                   <AlertTriangle size={14} className="mt-0.5 shrink-0 text-amber-300" />
-                  {resp.note}
+                  Response exceeded 2 MB and was cut off. Status, headers and timing are complete.
                 </div>
               )}
               {resp && resTab === 'body' && <JsonView text={resp.body} highlightKeys={flaggedKeys} className={cn(!wrap && 'whitespace-pre')} />}
@@ -457,14 +618,20 @@ export default function ApiTester() {
         <AiPanel
           state={aiState}
           analysis={analysis}
-          onAnalyse={analyse}
+          onAnalyse={() => void analyse()}
           onExport={() => setExportOpen(true)}
           canAnalyse={!!resp}
-          className="min-h-[420px] lg:col-span-5 lg:min-h-0 xl:col-span-5"
+          className="min-h-[360px] lg:col-span-4 lg:min-h-0 xl:col-span-4"
         />
       </div>
 
-      <ExportModal open={exportOpen} onClose={() => setExportOpen(false)} title="Login endpoint audit" target={`${method} ${url}`} reportId="RPT-2042" />
+      <ExportModal
+        open={exportOpen}
+        onClose={() => setExportOpen(false)}
+        title={`${method} ${url}`}
+        target={`${method} ${url}`}
+        reportId="—"
+      />
     </div>
   )
 }
@@ -511,4 +678,12 @@ function CopyBtn({ text }: { text: string }) {
 function statusName(s: number) {
   const m: Record<number, string> = { 200: 'OK', 201: 'Created', 204: 'No Content', 301: 'Moved', 302: 'Found', 304: 'Not Modified', 400: 'Bad Request', 401: 'Unauthorized', 403: 'Forbidden', 404: 'Not Found', 429: 'Too Many Requests', 500: 'Server Error', 502: 'Bad Gateway', 503: 'Unavailable' }
   return m[s] ?? ''
+}
+
+/** Compact "how long ago" for the session history rail. */
+function relativeTime(at: number): string {
+  const secs = Math.max(0, Math.round((Date.now() - at) / 1000))
+  if (secs < 60) return `${secs}s`
+  if (secs < 3600) return `${Math.floor(secs / 60)}m`
+  return `${Math.floor(secs / 3600)}h`
 }

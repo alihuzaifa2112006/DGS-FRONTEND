@@ -1,4 +1,4 @@
-import { severityMeta, type Severity } from '@/lib/mock'
+import { severityMeta, type Severity } from '@/lib/security'
 import { cn } from '@/lib/utils'
 
 export function SeverityBadge({ severity, className, short }: { severity: Severity; className?: string; short?: boolean }) {

@@ -1,3 +1,4 @@
+import { Suspense } from 'react'
 import type { Metadata } from 'next'
 import LoginForm from './LoginForm'
 
@@ -7,5 +8,10 @@ export const metadata: Metadata = {
 }
 
 export default function LoginPage() {
-  return <LoginForm />
+  // LoginForm reads ?next= via useSearchParams, which needs a Suspense boundary
+  return (
+    <Suspense fallback={<div className="h-[520px] animate-pulse rounded-xl bg-paper-2" />}>
+      <LoginForm />
+    </Suspense>
+  )
 }

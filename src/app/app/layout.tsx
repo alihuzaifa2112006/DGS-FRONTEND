@@ -14,14 +14,13 @@ import {
   LogOut,
   Menu,
   X,
-  Search,
-  Bell,
   ChevronRight,
   Sparkles,
 } from 'lucide-react'
 import Logo, { LogoMark } from '@/components/Logo'
 import { cn } from '@/lib/utils'
-import { useSession, clearSession, type Session } from '@/lib/session'
+import { useAuth, signOut, type AuthUser } from '@/lib/session'
+import { useConfirm } from '@/components/ui/ConfirmDialog'
 
 const nav = [
   { href: '/app', label: 'Overview', icon: LayoutDashboard, exact: true },
@@ -46,7 +45,7 @@ export default function ConsoleLayout({ children }: { children: ReactNode }) {
   const [open, setOpen] = useState(false)
   const pathname = usePathname()
   const router = useRouter()
-  const session = useSession()
+  const { user: session, status } = useAuth()
 
   // Alt+1..3 jump between the main workspaces
   useEffect(() => {
@@ -59,16 +58,43 @@ export default function ConsoleLayout({ children }: { children: ReactNode }) {
     return () => window.removeEventListener('keydown', h)
   }, [router])
 
-  const logout = () => {
-    clearSession()
-    router.push('/login')
+  const [loggingOut, setLoggingOut] = useState(false)
+  const confirm = useConfirm()
+
+  const askLogout = () =>
+    confirm.ask(
+      {
+        title: 'Sign out?',
+        message: 'You will need to sign in again on this device. Unsaved work in the console is lost.',
+        confirmLabel: 'Sign out',
+        tone: 'danger',
+      },
+      doLogout,
+    )
+
+  const doLogout = async () => {
+    if (loggingOut) return
+    setLoggingOut(true)
+    await signOut()
+    // `replace`, not `push` — Back must not return to a console page that
+    // renders as if the user were still signed in.
+    router.replace('/login')
+    router.refresh()
   }
+
+  // Middleware keeps anonymous visitors out, but a session can also die
+  // while the tab sits open (password change elsewhere, refresh rejected).
+  useEffect(() => {
+    if (status === 'anonymous' && !loggingOut) {
+      router.replace('/login')
+    }
+  }, [status, loggingOut, router])
 
   return (
     <div className="flex min-h-screen bg-ink-900 text-white">
       {/* sidebar — desktop */}
       <aside className="sticky top-0 hidden h-screen w-[248px] shrink-0 flex-col border-r border-white/8 bg-ink-950/60 lg:flex">
-        <SidebarContent pathname={pathname} onLogout={logout} session={session} onNavigate={() => {}} />
+        <SidebarContent pathname={pathname} onLogout={askLogout} session={session} onNavigate={() => {}} />
       </aside>
 
       {/* sidebar — mobile drawer */}
@@ -92,7 +118,7 @@ export default function ConsoleLayout({ children }: { children: ReactNode }) {
               <button onClick={() => setOpen(false)} className="absolute right-3 top-3 rounded-md p-1.5 text-ink-300 hover:text-white" aria-label="Close menu">
                 <X size={18} />
               </button>
-              <SidebarContent pathname={pathname} onLogout={logout} session={session} onNavigate={() => setOpen(false)} />
+              <SidebarContent pathname={pathname} onLogout={askLogout} session={session} onNavigate={() => setOpen(false)} />
             </motion.aside>
           </>
         )}
@@ -114,15 +140,6 @@ export default function ConsoleLayout({ children }: { children: ReactNode }) {
           </nav>
 
           <div className="ml-auto flex items-center gap-2">
-            <div className="hidden h-9 w-64 items-center gap-2 rounded-md bg-ink-800 px-3 text-[13px] text-ink-300 ring-1 ring-white/8 md:flex">
-              <Search size={14} />
-              <span className="flex-1">Search requests, reports…</span>
-              <kbd className="rounded bg-white/5 px-1.5 font-mono text-[10px] text-ink-300">⌘K</kbd>
-            </div>
-            <button className="relative rounded-md p-2 text-ink-200 hover:bg-white/5" aria-label="Notifications">
-              <Bell size={17} />
-              <span className="absolute right-1.5 top-1.5 h-1.5 w-1.5 rounded-full bg-brand-400" />
-            </button>
             <Link
               href="/app/api-tester"
               className="hidden h-9 items-center gap-1.5 rounded-md bg-brand-600 px-3 text-[13px] font-semibold hover:bg-brand-500 sm:inline-flex"
@@ -147,6 +164,8 @@ export default function ConsoleLayout({ children }: { children: ReactNode }) {
           </AnimatePresence>
         </main>
       </div>
+
+      <confirm.Dialog />
     </div>
   )
 }
@@ -159,7 +178,7 @@ function SidebarContent({
 }: {
   pathname: string
   onLogout: () => void
-  session: Session | null
+  session: AuthUser | null
   onNavigate: () => void
 }) {
   const initials = (session?.name || session?.email || 'DG').slice(0, 2).toUpperCase()
@@ -198,22 +217,38 @@ function SidebarContent({
         </Link>
       </nav>
 
-      {/* usage card */}
-      <div className="mx-3 mb-3 rounded-xl bg-ink-800 p-3 ring-1 ring-white/8">
-        <div className="flex items-center justify-between font-mono text-[10.5px] uppercase tracking-wider text-ink-300">
-          <span>AI analyses</span>
-          <span className="text-white">31 / 50</span>
+      {/* Plan card. Usage metering needs a counter the backend does not keep
+          yet, so this shows only what we actually know: the plan on the account. */}
+      {session && (
+        <div className="mx-3 mb-3 rounded-xl bg-ink-800 p-3 ring-1 ring-white/8">
+          <div className="flex items-center justify-between font-mono text-[10.5px] uppercase tracking-wider text-ink-300">
+            <span>Plan</span>
+            <span className="text-white">{session.plan}</span>
+          </div>
+          {session.plan === 'free' && (
+            <Link href="/#pricing" className="mt-2 inline-block text-[12px] font-semibold text-brand-300 hover:text-brand-200">
+              Upgrade to Pro →
+            </Link>
+          )}
         </div>
-        <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white/8">
-          <motion.div initial={{ width: 0 }} animate={{ width: '62%' }} transition={{ duration: 1, ease: [0.16, 1, 0.3, 1] }} className="h-full rounded-full bg-gradient-to-r from-brand-500 to-brand-300" />
-        </div>
-        <Link href="/#pricing" className="mt-2 inline-block text-[12px] font-semibold text-brand-300 hover:text-brand-200">
-          Upgrade to Pro →
-        </Link>
-      </div>
+      )}
 
       <div className="flex items-center gap-3 border-t border-white/8 px-4 py-3">
-        <span className="flex h-8 w-8 items-center justify-center rounded-full bg-brand-600 text-[11px] font-bold">{initials}</span>
+        {session?.avatarUrl ? (
+          /* eslint-disable-next-line @next/next/no-img-element -- served from our own
+             route with an immutable, versioned URL; next/image would only add a proxy hop. */
+          <img
+            src={session.avatarUrl}
+            alt=""
+            width={32}
+            height={32}
+            className="h-8 w-8 shrink-0 rounded-full object-cover ring-1 ring-white/15"
+          />
+        ) : (
+          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-brand-600 text-[11px] font-bold">
+            {initials}
+          </span>
+        )}
         <div className="min-w-0 flex-1">
           <div className="truncate text-[13px] font-semibold">{session?.name || 'Guest user'}</div>
           <div className="truncate font-mono text-[10.5px] text-ink-300">{session?.email || 'not signed in'}</div>

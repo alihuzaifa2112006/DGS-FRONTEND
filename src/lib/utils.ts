@@ -25,3 +25,29 @@ export function tryPrettyJson(text: string) {
     return text
   }
 }
+
+/** Turns a raw user-agent string into something a person can recognise. */
+export function describeDevice(ua: string | null): string {
+  if (!ua) return 'Unknown device'
+
+  const browser =
+    /Edg\//.test(ua) ? 'Edge'
+    : /OPR\/|Opera/.test(ua) ? 'Opera'
+    : /Chrome\//.test(ua) ? 'Chrome'
+    : /Firefox\//.test(ua) ? 'Firefox'
+    // Safari ships "Chrome" in no UA, but Chrome ships "Safari" in all of them —
+    // so Safari is only what is left after the others are ruled out.
+    : /Safari\//.test(ua) ? 'Safari'
+    : 'Browser'
+
+  const os =
+    /Windows NT 10/.test(ua) ? 'Windows'
+    : /Windows/.test(ua) ? 'Windows'
+    : /iPhone|iPad|iPod/.test(ua) ? 'iOS'
+    : /Android/.test(ua) ? 'Android'
+    : /Mac OS X/.test(ua) ? 'macOS'
+    : /Linux/.test(ua) ? 'Linux'
+    : 'Unknown OS'
+
+  return `${browser} on ${os}`
+}
